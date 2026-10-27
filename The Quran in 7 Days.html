@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quran in 7 Days</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap">
+<style>
+:root{--bg:#f7f4ec;--card:#fff;--ink:#1d2b24;--mute:#66736c;--acc:#0f6b4f;--line:#e2dccb}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1714;--card:#17221e;--ink:#e8efe9;--mute:#93a39a;--acc:#4fc79a;--line:#26352f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.15rem;margin:4px 0 2px}
+.sub{color:var(--mute);font-size:.85rem;margin-bottom:12px}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px}
+.days button{padding:8px 0;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;font-size:.8rem;cursor:pointer}
+.days button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.days button.today{outline:2px dashed var(--acc);outline-offset:1px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 16px;text-align:center;min-height:240px;display:flex;flex-direction:column;justify-content:center;gap:14px}
+.ar{font-family:Amiri,"Noto Naskh Arabic",serif;font-size:2rem;line-height:2.2;direction:rtl}
+.tr{color:var(--ink);font-size:1.05rem;line-height:1.6}
+.ref{color:var(--mute);font-size:.85rem}
+.ctl{display:flex;gap:10px;justify-content:center;align-items:center;margin:14px 0;flex-wrap:wrap}
+.ctl button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:50%;width:48px;height:48px;font-size:1.1rem;cursor:pointer}
+.ctl #pp{background:var(--acc);color:#fff;width:64px;height:64px;font-size:1.4rem;border:0}
+select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--mute)}
+#msg{color:#c0392b;text-align:center;font-size:.85rem;min-height:1.2em}
+</style>
+</head>
+<body>
+<main>
+<h1>The Quran in 7 Days</h1>
+<div class="sub">Continuous recitation with translation. After day 7 it begins again.</div>
+<div class="days" id="days"></div>
+<div class="card">
+  <div class="ref" id="ref">Press play to begin</div>
+  <div class="ar" id="ar">بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+  <div class="tr" id="tr"></div>
+  <div class="tr" id="ur" dir="rtl" style="font-family:Amiri,'Noto Nastaliq Urdu','Noto Naskh Arabic',serif;font-size:1.3rem;line-height:2"></div>
+</div>
+<div class="bar"><i id="prog"></i></div>
+<div class="row"><span id="dayinfo"></span><span id="pct"></span></div>
+<div class="ctl">
+  <button id="pv" aria-label="Previous">⏮</button>
+  <button id="pp" aria-label="Play">▶</button>
+  <button id="nx" aria-label="Next">⏭</button>
+  <button id="restart" aria-label="Restart seven-day cycle" style="border-radius:8px;width:auto;height:auto;padding:8px 12px;font-size:.85rem">Restart seven-day cycle</button>
+  <button id="goStart" aria-label="Go to first Surah" style="border-radius:8px;width:auto;height:auto;padding:8px 12px;font-size:.85rem">Go to first Surah</button>
+</div>
+<div class="ctl">
+  <select id="lang" aria-label="Written translation — Urdu choices appear first">
+    <option value="ur.jalandhry">اردو (Jalandhry)</option>
+    <option value="en.sahih">English (Sahih Intl)</option>
+    <option value="fr.hamidullah">Français</option>
+    <option value="tr.diyanet">Türkçe</option>
+    <option value="id.indonesian">Indonesia</option>
+  </select>
+  <select id="rec" aria-label="Reciter">
+    <option value="ar.alafasy">Mishary Alafasy</option>
+    <option value="ar.abdulbasitmurattal">Abdul Basit (Murattal)</option>
+    <option value="ar.husary">Mahmoud Al-Husary</option>
+    <option value="ar.minshawi">Al-Minshawi</option>
+  </select>
+  <label style="font-size:.9rem"><input type="checkbox" id="urdu" checked> 🔊 اردو آڈیو ترجمہ</label>
+</div>
+<div id="msg"></div>
+</main>
+<script>
+// Seven traditional stations (manzils): [first surah, last surah]
+var MZ=[[1,4],[5,9],[10,16],[17,25],[26,36],[37,49],[50,114]];
+var $=function(id){return document.getElementById(id)};
+var a=new Audio(), cache={}, playing=false, m=0, s=1, i=0, cur=null;
+var today=Math.floor(Date.now()/864e5)%7; // today's manzil in the endless 7-day cycle
+
+function save(){try{localStorage.setItem('q7',JSON.stringify({m:m,s:s,i:i,l:$('lang').value,r:$('rec').value}))}catch(e){}}
+function restore(){try{var d=JSON.parse(localStorage.getItem('q7'));if(d){m=d.m;s=d.s;i=d.i;$('lang').value=d.l;$('rec').value=d.r;return true}}catch(e){}return false}
+
+function buildDays(){
+  var h='';
+  for(var k=0;k<7;k++)h+='<button data-k="'+k+'" class="'+(k===m?'on ':'')+(k===today?'today':'')+'">Day '+(k+1)+'</button>';
+  $('days').innerHTML=h;
+  [].forEach.call($('days').children,function(b){b.onclick=function(){jump(+b.dataset.k)}});
+}
+async function fetchSurah(n){
+  var key=n+$('lang').value;
+  if(cache[key])return cache[key];
+  var L=$('lang').value,U=(L==='ur.jalandhry');
+  var r=await fetch('https://api.alquran.cloud/v1/surah/'+n+'/editions/quran-uthmani,ur.jalandhry'+(U?'':','+L));
+  var j=await r.json();
+  var o={name:j.data[0].englishName,ar:j.data[0].ayahs,ur:j.data[1].ayahs,tr:j.data[U?1:2].ayahs};
+  cache[key]=o;return o;
+}
+async function load(){
+  $('msg').textContent='';
+  try{cur=await fetchSurah(s)}catch(e){$('msg').textContent='Could not load text. Check your connection.';return false}
+  if(i>=cur.ar.length)i=0;
+  return true;
+}
+function show(){
+  var x=cur.ar[i],t=cur.tr[i];
+  $('ref').textContent=cur.name+' '+s+':'+x.numberInSurah;
+  $('ar').textContent=x.text.replace(/^بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ\s?/,function(z){return (s!==1&&x.numberInSurah===1&&s!==9)?z:z});
+  $('tr').textContent=t.text;
+  $('ur').textContent=($('urdu').checked&&$('lang').value!=='ur.jalandhry')?cur.ur[i].text:'';
+  $('tr').style.direction=$('lang').value.indexOf('ur.')===0?'rtl':'ltr';
+  var done=(s-MZ[m][0]+i/cur.ar.length)/(MZ[m][1]-MZ[m][0]+1);
+  $('prog').style.width=Math.min(100,done*100)+'%';
+  $('dayinfo').textContent='Day '+(m+1)+' of 7'+(m===today?' · today':'');
+  $('pct').textContent=Math.round(((m+done)/7)*100)+'% of cycle';
+  buildDays();
+}
+function audioUrl(){return 'https://cdn.islamic.network/quran/audio/128/'+$('rec').value+'/'+cur.ar[i].number+'.mp3'}
+var tok=0, inUrdu=false, pendingU=false;
+var ta=new Audio();
+function stopUrdu(){tok++;inUrdu=false;ta.pause();if('speechSynthesis' in window)speechSynthesis.cancel()}
+function chunks(t){var o=[],c='';t.split(' ').forEach(function(x){if((c+' '+x).length>180){o.push(c);c=x}else c=c?c+' '+x:x});if(c)o.push(c);return o}
+function speakOnline(){ // fallback: online Urdu text-to-speech, in short pieces
+  stopUrdu();
+  var t=tok,q=chunks(cur.ur[i].text),k=0;inUrdu=true;
+  function fail(){if(t!==tok)return;inUrdu=false;$('urdu').checked=false;$('ur').textContent='';$('msg').textContent='Urdu voice not available. On Android: Settings → Text-to-speech → Google → Install voice data → Urdu.';step(1)}
+  function nxt(){
+    if(t!==tok||!inUrdu)return;
+    if(k>=q.length){inUrdu=false;step(1);return}
+    ta.src='https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=ur&q='+encodeURIComponent(q[k++]);
+    ta.play().catch(fail);
+  }
+  ta.onended=nxt;ta.onerror=fail;nxt();
+}
+function speakUrdu(){
+  if(!('speechSynthesis' in window)){speakOnline();return}
+  var v=speechSynthesis.getVoices().filter(function(x){return x.lang.toLowerCase().replace('_','-').indexOf('ur')===0})[0];
+  if(!v){speakOnline();return}
+  stopUrdu();
+  var t=tok,u=new SpeechSynthesisUtterance(cur.ur[i].text);
+  u.voice=v;u.lang=v.lang;u.rate=.9;
+  inUrdu=true;
+  u.onend=u.onerror=function(){if(t===tok&&inUrdu){inUrdu=false;step(1)}};
+  speechSynthesis.speak(u);
+}
+if('speechSynthesis' in window)speechSynthesis.getVoices();
+function playCur(){
+  stopUrdu();
+  a.src=audioUrl();
+  a.play().catch(function(){$('msg').textContent='Tap play to start audio.';setPlay(false)});
+  var nx=cur.ar[i+1];if(nx){var p=new Audio();p.preload='auto';p.src='https://cdn.islamic.network/quran/audio/128/'+$('rec').value+'/'+nx.number+'.mp3'}
+}
+function setPlay(v){playing=v;$('pp').textContent=v?'⏸':'▶'}
+async function step(d){
+  i+=d;
+  if(i>=cur.ar.length){ // next surah, next day, then restart after day 7
+    s++;i=0;
+    if(s>MZ[m][1]){m=(m+1)%7;s=MZ[m][0]}
+    if(!await load())return;
+  }else if(i<0){
+    if(s>MZ[m][0]){s--;if(!await load())return;i=cur.ar.length-1}else i=0;
+  }
+  show();save();
+  if(playing)playCur();
+}
+async function jump(k){m=k;s=MZ[k][0];i=0;if(await load()){show();save();if(playing)playCur()}}
+a.onended=function(){if($('urdu').checked)speakUrdu();else step(1)};
+a.onerror=function(){$('msg').textContent='Audio unavailable, moving on…';setTimeout(function(){if(playing)step(1)},1500)};
+$('pp').onclick=async function(){
+  if(!cur&&!await load())return;
+  if(playing){var w=inUrdu;a.pause();stopUrdu();pendingU=w;setPlay(false)}
+  else{
+    setPlay(true);
+    if(pendingU){pendingU=false;speakUrdu()}
+    else if(a.src&&!a.ended&&a.currentTime>0)a.play();
+    else{show();playCur()}
+  }
+};
+$('nx').onclick=function(){if(cur)step(1)};
+$('pv').onclick=function(){if(cur)step(-1)};
+$('restart').onclick=async function(){
+  a.pause();stopUrdu();pendingU=false;setPlay(false);
+  m=0;s=1;i=0;
+  $('msg').textContent='Seven-day cycle reset to Al-Fātiḥah. Start continuous recitation when ready.';
+  if(await load()){show();save()}
+};
+$('goStart').onclick=async function(){
+  a.pause();stopUrdu();pendingU=false;setPlay(false);
+  m=0;s=1;i=0;
+  $('msg').textContent='Returned to the first chapter, Al-Fātiḥah. Playback is paused.';
+  if(await load()){show();save()}
+};
+$('urdu').onchange=function(){if(cur)show();if(!this.checked)stopUrdu()};
+$('lang').onchange=async function(){if(await load()){show();save()}};
+$('rec').onchange=function(){save();if(playing&&cur)playCur()};
+
+if(!restore()){m=today;s=MZ[m][0];i=0}
+buildDays();
+load().then(function(ok){if(ok)show()});
+</script>
+</body>
+</html>
